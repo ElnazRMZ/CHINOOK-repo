@@ -1,0 +1,113 @@
+--1( 10 ???? ???? ?? ??????? ????? ?? ????? ?? ????? ????? ????? ???
+SELECT T.Trackid, T.Name AS TrackName,   
+       SUM(IL.Quantity * IL.UnitPrice) AS TotalRevenue  
+FROM Track T  
+JOIN InvoiceLine IL ON T.TrackId = IL.TrackId  
+GROUP BY T.TRACKID, T.Name 
+ORDER BY TotalRevenue DESC  
+FETCH FIRST 10 ROWS ONLY;
+
+
+--2( ????? ???? ????? ?? ?? ??? ?? ??? ????? ??????? ?????? ??? ? ?? ?????
+SELECT G.Name AS GenreName,   
+       COUNT(IL.TrackId) AS TotalTracksSold,   
+       SUM(IL.Quantity * IL.UnitPrice) AS TotalRevenue  
+FROM Genre G  
+JOIN Track T ON G.GenreId = T.GenreId  
+JOIN InvoiceLine IL ON T.TrackId = IL.TrackId  
+GROUP BY G.Name  
+ORDER BY TotalTracksSold DESC, TotalRevenue DESC
+FETCH FIRST 1 ROWS ONLY;
+
+
+--3( ???????? ?? ?? ???? ???? ???????
+SELECT C.CustomerId,   
+       C.FirstName,   
+       C.LastName  
+FROM Customer C  
+LEFT JOIN Invoice I ON C.CustomerId = I.CustomerId  
+WHERE I.InvoiceId IS NULL;
+
+
+--4( ??????? ???? ???? ?? ?? ?? ?? ?????
+SELECT A.ALBUMID,   
+       A.TITLE,   
+       AVG(T.Milliseconds) AS AverageTrackLength  
+FROM Album A  
+JOIN Track T ON A.ALBUMId = T.ALBUMId  
+GROUP BY A.ALBUMId, A.TITLE
+Order by  AverageTrackLength DESC;
+
+
+--5( ??????? ?? ??????? ????? ???? ?? ?????
+SELECT E.EmployeeId,   
+       E.FirstName,   
+       E.LastName,   
+       COUNT(I.InvoiceId) AS TotalSales  
+FROM Employee E  
+JOIN Customer C ON E.EmployeeId = C.SupportRepId  
+JOIN Invoice I ON C.CustomerId = I.CustomerId  
+GROUP BY E.EmployeeId, E.FirstName, E.LastName  
+ORDER BY TotalSales DESC  
+FETCH FIRST 1 ROW ONLY;
+
+
+--6( ???????? ?? ?? ??? ?? ?? ???? ???? ?????
+SELECT C.CustomerId,   
+       C.FirstName,   
+       C.LastName  
+FROM Customer C  
+JOIN Invoice I ON C.CustomerId = I.CustomerId  
+JOIN InvoiceLine IL ON I.InvoiceId = IL.InvoiceId  
+JOIN Track T ON IL.TrackId = T.TrackId  
+JOIN Genre G ON T.GenreId = G.GenreId  
+GROUP BY C.CustomerId, C.FirstName, C.LastName  
+HAVING COUNT(DISTINCT G.GenreId) > 1;
+
+
+--7( ?? ???? ???? ?? ??? ????? ???? ???? ?? ????
+WITH RankedTracks AS (  
+    SELECT G.Name AS GenreName,
+           T.trackid,T.Name,    
+           SUM(IL.Quantity * IL.UnitPrice) AS Revenue,  
+           Row_Number() OVER (PARTITION BY G.GenreId ORDER BY SUM(IL.Quantity * IL.UnitPrice) DESC) AS Rank  
+    FROM Track T  
+    JOIN Genre G ON T.GenreId = G.GenreId  
+    JOIN InvoiceLine IL ON T.TrackId = IL.TrackId  
+    GROUP BY G.GenreId, G.Name, T.trackid,T.Name
+)  
+SELECT *  
+FROM RankedTracks  
+WHERE Rank <= 3;
+
+
+--8( ????? ??????? ?????? ??? ?? ???? ????? ?? ?? ??? ?? ???? ???????
+with cte as (SELECT EXTRACT(YEAR FROM I.InvoiceDate) AS Year,  
+       SUM(IL.Quantity) AS TotalTracksSold  
+FROM Invoice I  
+JOIN InvoiceLine IL ON I.InvoiceId = IL.InvoiceId  
+GROUP BY EXTRACT(YEAR FROM I.InvoiceDate))
+Select Year, SUM(TotalTracksSold) OVER (ORDER BY Year) AS CumulativeTotalTracksSold from cte 
+ORDER BY Year;
+
+
+--9( ???????? ?? ????? ??????? ?????? ?? ??????? ????? ???? ???? ??????? ???
+WITH CustomerTotalPurchasing AS (  
+    SELECT C.CustomerId,   
+           SUM(IL.Quantity * IL.UnitPrice) AS TotalSpent  
+    FROM Customer C  
+    JOIN Invoice I ON C.CustomerId = I.CustomerId  
+    JOIN InvoiceLine IL ON I.InvoiceId = IL.InvoiceId  
+    GROUP BY C.CustomerId  
+),  
+AverageSpent AS (  
+    SELECT AVG(TotalSpent) AS AvgSpent  
+    FROM CustomerTotalPurchasing  
+)  
+SELECT C.CustomerId,   
+       C.FirstName,   
+       C.LastName,   
+       CTP.TotalSpent  
+FROM Customer C  
+JOIN CustomerTotalPurchasing CTP ON C.CustomerId = CTP.CustomerId  
+JOIN AverageSpent AVG ON CTP.TotalSpent > AVG.AvgSpent;
